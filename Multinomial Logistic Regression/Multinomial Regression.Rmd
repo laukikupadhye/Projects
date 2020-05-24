@@ -1,0 +1,105 @@
+---
+title: "Using multinomial regression on Wine Quality Data"
+author: "Laukik "
+date: "5/4/2020"
+output: word_document
+---
+
+# Dataset Description
+
+The dataset name "Soccer International History" is available in mldata.com which is a platform containing datasets which are suitable for machine learning algorithms. This dataset has 38685 attributes with 8 columns. It was published in 2017.
+
+```{r}
+#install.packages("UBL")
+
+```
+
+```{r}
+library(UBL)
+data <- read.csv("winequality-red.csv",header = T,sep = ",")
+data$quality <- as.factor(data$quality)
+data<-SmoteClassif(quality~.,data,C.perc="balance",k=5,repl=FALSE, dist="Euclidean", p=2)
+str(data)
+summary(data)
+n=nrow(data)
+n
+p=ncol(data)
+p
+
+```
+
+As we can see from above, the 8 column names with their datatypes are shown above.Niether it has any missing values which free the work of data preprocessing. Above, We also have the statistical information for all the 8 attributes. Our aim is to apply "Multinomial linear Regression" to predict the home team outcome (Win (1), Loss(2) & Draw (3)) in all International football matches. The first 7 columns are the features and the last attribute "home_team_result" is the response variable.
+We will divide our dataset in two partitions: training (50%) & testing (50%). Before Partioning the data, we need to divide predictor variables in one matrix and the response variable in another matrix. 
+
+```{r}
+
+#data$home_team_result <- as.numeric(data$home_team_result)
+mat <- matrix(0,n,p-1)
+
+mat
+table(data$quality)
+for (i in 1:(p-1)) {
+  mat[,i]  <- data[,i]
+  
+}
+label <- matrix(0,n,1)
+label[,1] <- data[,p]
+
+ind <- sample(1:n,floor(n/2),replace = F)
+
+trn <- mat[ind,]
+tst <- mat[-ind,]
+
+trn_class <- label[ind]
+tst_class <- label[-ind]
+
+```
+
+
+# Model
+
+Multinomial regression is an extension of binomial logistic regression. The algorithm allows us to predict a categorical dependent variable which has more than two levels. Like any other regression model, the multinomial output can be predicted using one or more independent variable and the variables can be of a nominal, ordinal or continuous type. 
+
+We are using glmnet function present in "glmnet" package. This function fits a generalized linear model via penalized maximum likelihood. It can include large sparse data matrices, different shaped data, which makes it very compatible to use. glmnet can fit following models:
+
+1. Linear
+2. multinomial
+3. logistic
+4. poisson
+5. cox regression
+
+Before training the model, we are using cv.glmnet which performs 10-fold cross-validation for glmnet. For our dataset, we are setting up some of the method parameter for better performance. We have set alpha=0 for some transperancy. type.measure = "mse" which uses squared-error for gaussian models, deviance for logistic and poisson regression, and partial-likelihood for the cox model. The family used is multinomial and we have set trace.it = 1 to see training from cross validation.Putting family as multinomial fits a symmetric multinomial model, where each class is represented by a linear model (on the log-scale).Finally we are training our model with setting lambda = min lambda value from cross validation.  
+
+
+```{r}
+library(glmnet)
+crossvalidation <- cv.glmnet(trn, trn_class, type.measure="mse", alpha=0,
+                          family="multinomial",trace.it = 1)
+crossvalidation
+lambda_min <- crossvalidation$lambda.min
+model <- glmnet(trn, trn_class, family = "multinomial", alpha = 0,
+                         lambda = lambda_min)
+model
+pred <- predict(model, tst, type = "class")
+```
+
+```{R}
+pred <- predict(model, tst, type = "class")
+pred
+```
+
+
+To measure the performance of the medel we can use confusion matrix.
+
+```{r}
+library(e1071)
+confusionMatrix(table(pred,tst_class))
+```
+
+# Performance
+
+We will start testing our model by first making a misclassification table of predicted and actual values.
+
+
+Here we can check the sensitivity and specificity for each class. Even it gives us the confidence intervals which is very small range.
+
